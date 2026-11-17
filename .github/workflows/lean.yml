@@ -1,0 +1,68 @@
+name: Lean CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build (lake, pinned toolchain)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Install elan
+        run: |
+          curl -sSfL https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh \
+            | sh -s -- -y --default-toolchain none
+          echo "$HOME/.elan/bin" >> "$GITHUB_PATH"
+
+      - name: Report toolchain (from repo)
+        run: |
+          echo "=== lean-toolchain ==="
+          cat lean-toolchain
+          elan --version
+
+      - name: Fetch Mathlib cache (optional)
+        run: lake exe cache get || echo "::warning::cache miss; building from source"
+
+      - name: Build
+        run: |
+          set -o pipefail
+          mkdir -p cert-out
+          lake build 2>&1 | tee cert-out/lake-build.log
+
+      - name: Axiom audit
+        run: |
+          set -o pipefail
+          lake env lean TFFrohmanianTether/AxiomAudit.lean 2>&1 | tee cert-out/axiom-audit.txt || true
+
+      - name: Collect pins
+        if: always()
+        run: |
+          mkdir -p cert-out
+          cp -a lean-toolchain lake-manifest.json cert-out/ || true
+          sha256sum lean-toolchain lake-manifest.json | tee cert-out/pins.sha256 || true
+          {
+            echo "commit: $(git rev-parse HEAD)"
+            echo "GITHUB_SHA: $GITHUB_SHA"
+            echo "elan: $(elan --version 2>/dev/null || echo missing)"
+            echo "lean: $(lean --version 2>/dev/null || echo missing)"
+            echo "lake: $(lake --version 2>/dev/null || echo missing)"
+          } > cert-out/versions.txt
+
+      - name: Upload certificate
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: lean-certificate
+          path: cert-out/
