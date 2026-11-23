@@ -3,6 +3,7 @@ Copyright (c) 2026 Benjamin Stanley Frohman. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Benjamin Stanley Frohman
 -/
+
 import Mathlib.Tactic
 
 /-!
@@ -99,5 +100,157 @@ lemma TF_split (κ : ℝ) (ω δu δv : Fin 3 → ℝ) :
     TF κ ω δu δv = ω_KKS ω δu δv - κ * omega_sq_dot ω δu δv :=
   rfl
 
--- Additional lemmas from the original file for completeness (full original is in the tgz)
+lemma dot_e₁_e₁ : dot e₁ e₁ = 1 := by simp [dot, e₁]
+lemma dot_e₂_e₂ : dot e₂ e₂ = 1 := by simp [dot, e₂]
+lemma dot_e₁_e₂ : dot e₁ e₂ = 0 := by simp [dot, e₁, e₂]
+lemma dot_e₂_e₁ : dot e₂ e₁ = 0 := by simp [dot, e₁, e₂]
+lemma dot_e₂_e₃ : dot e₂ e₃ = 0 := by simp [dot, e₂, e₃]
+
+lemma cross_e₂_e₃ : cross e₂ e₃ = e₁ := by
+  funext i
+  fin_cases i <;> simp [cross, e₁, e₂, e₃]
+
+lemma ω_KKS_e₁_e₂_e₃ : ω_KKS e₁ e₂ e₃ = 1 := by
+  simp [ω_KKS, cross_e₂_e₃, dot_e₁_e₁]
+
+lemma ω_KKS_e₁_e₁_e₁ : ω_KKS e₁ e₁ e₁ = 0 := by
+  have : cross e₁ e₁ = fun _ => 0 := by
+    funext i; fin_cases i <;> simp [cross, e₁]
+  simp [ω_KKS, this, dot]
+
+lemma omega_sq_dot_e₁_e₁_e₁ : omega_sq_dot e₁ e₁ e₁ = 1 := by
+  simp [omega_sq_dot, dot_e₁_e₁]
+
+lemma omega_sq_dot_e₁_e₂_e₃ : omega_sq_dot e₁ e₂ e₃ = 0 := by
+  simp [omega_sq_dot, dot_e₁_e₁, dot_e₂_e₃]
+
+/-- The displayed density is not antisymmetric in general.
+
+Witness: `ω = δu = δv = e₁`, `κ = 1`. Then `ω_KKS = 0` and `omega_sq_dot = 1`, so
+`TF = -1` while `-TF = 1`.
+-/
+theorem TF_not_antisymmetric :
+    ¬ (∀ (κ : ℝ) (ω δu δv : Fin 3 → ℝ),
+        TF κ ω δu δv = - TF κ ω δv δu) := by
+  intro h
+  have hκ := h 1 e₁ e₁ e₁
+  have : TF 1 e₁ e₁ e₁ = -1 := by
+    simp [TF, ω_KKS_e₁_e₁_e₁, omega_sq_dot_e₁_e₁_e₁]
+  have : (-1 : ℝ) = 1 := by
+    simp [TF, ω_KKS_e₁_e₁_e₁, omega_sq_dot_e₁_e₁_e₁] at hκ
+    linarith
+  exact absurd this (by norm_num)
+
+/-- The displayed density is not symmetric either (the KKS term is alternating).
+
+Witness: `ω = e₁`, `δu = e₁`, `δv = e₂`, `κ = 0`. Then `TF(δu,δv) = 1`
+and `TF(δv,δu) = -1`.
+-/
+theorem TF_not_symmetric :
+    ¬ (∀ (κ : ℝ) (ω δu δv : Fin 3 → ℝ),
+        TF κ ω δu δv = TF κ ω δv δu) := by
+  intro h
+  have hκ := h 0 e₁ e₂ e₃
+  have hL : TF 0 e₁ e₂ e₃ = 1 := by
+    simp [TF, ω_KKS_e₁_e₂_e₃, omega_sq_dot_e₁_e₂_e₃]
+  have hk : ω_KKS e₁ e₃ e₂ = -1 := by
+    have := ω_KKS_antisymm e₁ e₂ e₃
+    rw [ω_KKS_e₁_e₂_e₃] at this
+    linarith
+  have hm : omega_sq_dot e₁ e₃ e₂ = 0 := by
+    rw [← omega_sq_dot_symm, omega_sq_dot_e₁_e₂_e₃]
+  have hR : TF 0 e₁ e₃ e₂ = -1 := by
+    simp [TF, hk, hm]
+  rw [hL, hR] at hκ
+  exact absurd hκ (by norm_num)
+
+/-- `Π_u v = v − (⟨v,u⟩/⟨u,u⟩) u`, with the convention `Π_0 = id`. -/
+noncomputable def Pi_u (u v : Fin 3 → ℝ) : Fin 3 → ℝ :=
+  if dot u u = 0 then v else fun i => v i - (dot v u / dot u u) * u i
+
+theorem Pi_u_self (u : Fin 3 → ℝ) : Pi_u u u = fun _ => 0 := by
+  unfold Pi_u
+  split_ifs with h
+  · rw [eq_zero_of_dot_self_eq_zero h]
+  · funext i
+    field_simp [h]
+    ring
+
+theorem omega_sq_dot_Pi_u_self (u δF : Fin 3 → ℝ) :
+    omega_sq_dot u (Pi_u u δF) (Pi_u u u) = 0 := by
+  simp [omega_sq_dot, Pi_u_self, dot]
+
+/-- The metric density still vanishes if the weight is an independent field `ω`,
+because `Π_u u = 0`. -/
+theorem omega_sq_dot_Pi_u_self_weight (ω u δF : Fin 3 → ℝ) :
+    omega_sq_dot ω (Pi_u u δF) (Pi_u u u) = 0 := by
+  simp [omega_sq_dot, Pi_u_self, dot]
+
+/-- Unprojected metric pairing with the energy direction `u` need not vanish. -/
+theorem omega_sq_dot_not_degenerate_on_u :
+    ∃ ω u, omega_sq_dot ω u u ≠ 0 := by
+  refine ⟨e₁, e₁, ?_⟩
+  simp [omega_sq_dot, dot_e₁_e₁]
+
+/-- Orthogonal projection onto the complement of `span{ω}` (Casimir direction).
+Convention: if `ω = 0` then `P^⊥ = id`. -/
+noncomputable def P_δC_perp (ω v : Fin 3 → ℝ) : Fin 3 → ℝ := Pi_u ω v
+
+theorem P_δC_perp_self (ω : Fin 3 → ℝ) : P_δC_perp ω ω = fun _ => 0 :=
+  Pi_u_self ω
+
+/-- The later `K_FT` density (October uniqueness paper): `|ω|² ⟨P_ω^⊥ v, P_ω^⊥ w⟩`. -/
+noncomputable def K_FT (ω v w : Fin 3 → ℝ) : ℝ :=
+  dot ω ω * dot (P_δC_perp ω v) (P_δC_perp ω w)
+
+theorem K_FT_vanishes_on_δC (ω v : Fin 3 → ℝ) : K_FT ω ω v = 0 := by
+  simp [K_FT, P_δC_perp_self, dot]
+
+theorem K_FT_vanishes_on_δC_right (ω v : Fin 3 → ℝ) : K_FT ω v ω = 0 := by
+  simp [K_FT, P_δC_perp_self, dot]
+
+theorem K_FT_uu_eq_zero_of_collinear (ω u : Fin 3 → ℝ) (c : ℝ)
+    (hu : u = fun i => c * ω i) : K_FT ω u u = 0 := by
+  have h : P_δC_perp ω u = fun _ => 0 := by
+    unfold P_δC_perp Pi_u
+    split_ifs with h0
+    · have hω := eq_zero_of_dot_self_eq_zero h0
+      rw [hu, hω]
+      funext i; simp
+    · funext i
+      rw [hu]
+      have hd : dot (fun j => c * ω j) ω = c * dot ω ω :=
+        dot_smul_left ω ω c
+      simp only [hd]
+      field_simp [h0]
+      ring
+  simp [K_FT, h, dot]
+
+/-- Explicit witness: `K_FT(u,u)` need not vanish when `u` is not parallel to `ω`. -/
+theorem K_FT_uu_not_identically_zero :
+    ∃ ω u, K_FT ω u u ≠ 0 := by
+  refine ⟨e₁, e₂, ?_⟩
+  have hpi : P_δC_perp e₁ e₂ = e₂ := by
+    unfold P_δC_perp Pi_u
+    have h0 : dot e₁ e₁ ≠ 0 := by simp [dot_e₁_e₁]
+    simp [h0, dot_e₂_e₁, dot_e₁_e₁]
+  have : K_FT e₁ e₂ e₂ = 1 := by
+    simp [K_FT, hpi, dot_e₁_e₁, dot_e₂_e₂]
+  exact this.symm ▸ (by norm_num : (1 : ℝ) ≠ 0)
+
+/-- Projected (energy-null) pairing: `⟨Π_u δF, Π_u u⟩ = 0`, hence any kernel
+built from `Π_u δF · Π_u δH` with `δH = u` vanishes.
+This is C2 / energy-null degeneracy, used in vFinal's degeneracy paragraph
+and in the published obstruction papers 23971661, 24120781, 23990195. -/
+theorem Pi_u_pairing_with_u (u δF : Fin 3 → ℝ) :
+    dot (Pi_u u δF) (Pi_u u u) = 0 := by
+  simp [Pi_u_self, dot_zero_right]
+
+/-- Consequently the tether contribution to `dF/dt` along the kinetic-energy
+Hamiltonian, in the projected-kernel reading with `δH = u`, is identically zero. -/
+theorem Pi_u_tether_contribution_along_H (κ : ℝ) (ω u δF : Fin 3 → ℝ) :
+    -κ * omega_sq_dot ω (Pi_u u δF) (Pi_u u u) = 0 := by
+  rw [omega_sq_dot_Pi_u_self_weight]
+  simp
+
 end TFFrohmanianTether
