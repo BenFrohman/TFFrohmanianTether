@@ -9,11 +9,9 @@ import Lake
 /-!
 # lakefile
 
-Local-only project (nothing pushed or published). The dependency pin
-(`lake-manifest.json`) and toolchain (`lean-toolchain`) are byte-for-byte
-copies of those in `BenFrohman/frohmanian-symplectic-tether-regularity`.
-Mathlib oleans are reused from an existing `.lake/packages` cache; Mathlib
-is not downloaded.
+The dependency pin (`lake-manifest.json`) and toolchain (`lean-toolchain`) are
+byte-for-byte copies of those in `BenFrohman/frohmanian-symplectic-tether-regularity`.
+CI fetches Mathlib with `lake exe cache get`; Mathlib is never built from source.
 -/
 
 open Lake DSL

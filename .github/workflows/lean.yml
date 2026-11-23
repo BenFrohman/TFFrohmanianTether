@@ -32,8 +32,8 @@ jobs:
           cat lean-toolchain
           elan --version
 
-      - name: Fetch Mathlib cache (optional)
-        run: lake exe cache get || echo "::warning::cache miss; building from source"
+      - name: Fetch Mathlib cache (required; Mathlib is never built from source)
+        run: lake exe cache get
 
       - name: Build
         run: |
@@ -44,14 +44,28 @@ jobs:
       - name: Axiom audit
         run: |
           set -o pipefail
-          lake env lean TFFrohmanianTether/AxiomAudit.lean 2>&1 | tee cert-out/axiom-audit.txt || true
+          lake env lean TFFrohmanianTether/AxiomAudit.lean 2>&1 | tee cert-out/axiom-audit.txt
+          python3 - cert-out/axiom-audit.txt <<'PY'
+          import re, sys
+          ok = re.compile(r"depends on axioms: \[(propext|Classical\.choice|Quot\.sound)(, (propext|Classical\.choice|Quot\.sound))*\]$|does not depend on any axioms$")
+          raw = open(sys.argv[1], encoding="utf-8").read().splitlines()
+          recs = []
+          for l in raw:
+              if recs and l[:1].isspace(): recs[-1] += " " + l.strip()
+              else: recs.append(l)
+          ax = [l for l in recs if "axioms" in l]
+          bad = [l for l in ax if not ok.search(l)] + [l for l in recs if re.search(r"sorry|error", l)]
+          print(f"axiom audit: read {len(raw)} lines, {len(ax)} axiom reports, {len(bad)} failures")
+          for l in bad: print("  " + l)
+          sys.exit(1 if bad or not ax else 0)
+          PY
 
       - name: Collect pins
         if: always()
         run: |
           mkdir -p cert-out
-          cp -a lean-toolchain lake-manifest.json cert-out/ || true
-          sha256sum lean-toolchain lake-manifest.json | tee cert-out/pins.sha256 || true
+          cp -a lean-toolchain lake-manifest.json cert-out/
+          sha256sum lean-toolchain lake-manifest.json | tee cert-out/pins.sha256
           {
             echo "commit: $(git rev-parse HEAD)"
             echo "GITHUB_SHA: $GITHUB_SHA"

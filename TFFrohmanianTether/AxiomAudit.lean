@@ -3,10 +3,15 @@ Copyright (c) 2026 Benjamin Stanley Frohman. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Benjamin Stanley Frohman
 -/
+
 import TFFrohmanianTether.Semantics
 import TFFrohmanianTether.Direction
 
-/-! Axiom audit: printed during `lake build`. -/
+/-!
+# TFFrohmanianTether.AxiomAudit
+
+ Axiom audit: printed during `lake build`.
+-/
 
 #check @TFFrohmanianTether.intended_correspondence
 #print TFFrohmanianTether.paper_claim
